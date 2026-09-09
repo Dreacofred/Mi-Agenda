@@ -54,6 +54,7 @@ Reglas:
 - "titulo" es un resumen corto (máximo 60 caracteres).
 - "contenido" es el detalle completo si hay info extra más allá del título, o null si no hace falta.
 - "fecha_hora" tiene que ser un string ISO 8601 con offset -03:00 (ej: "2026-09-12T10:00:00-03:00"), o null si no se mencionó ninguna fecha u hora.
+- MUY IMPORTANTE: nunca inventes ni asumas una fecha u hora que no esté dicha explícita o implícitamente en el audio (ni siquiera la fecha/hora actual). Si la persona no dijo cuándo, "fecha_hora" tiene que ser null, aunque el tipo sea "recordatorio" o "compromiso". Un recordatorio o compromiso sin fecha mencionada sigue siendo válido con fecha_hora en null.
 
 Respondé ÚNICAMENTE con un objeto JSON válido, sin texto adicional, sin backticks, con esta forma exacta:
 {"tipo": "...", "titulo": "...", "contenido": "..." o null, "fecha_hora": "..." o null}`;
