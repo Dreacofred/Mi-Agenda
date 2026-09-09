@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import type { Session } from '@supabase/supabase-js';
 
@@ -15,6 +15,13 @@ interface AgendaItem {
   fecha_hora: string | null;
   estado: Estado;
   created_at: string;
+}
+
+interface ItemPropuesto {
+  tipo: Tipo;
+  titulo: string;
+  contenido: string | null;
+  fecha_hora: string | null;
 }
 
 export default function Home() {
@@ -115,6 +122,14 @@ function Agenda({ session }: { session: Session }) {
   const [fecha, setFecha] = useState('');
   const [cargando, setCargando] = useState(true);
 
+  // --- Estado para grabación de voz ---
+  const [grabando, setGrabando] = useState(false);
+  const [procesandoAudio, setProcesandoAudio] = useState(false);
+  const [errorAudio, setErrorAudio] = useState<string | null>(null);
+  const [propuesta, setPropuesta] = useState<{ item: ItemPropuesto; transcripcion: string } | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+
   async function cargarItems() {
     setCargando(true);
     const { data } = await supabase
@@ -159,6 +174,89 @@ function Agenda({ session }: { session: Session }) {
     cargarItems();
   }
 
+  // --- Funciones de voz ---
+  async function iniciarGrabacion() {
+    setErrorAudio(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm')
+        ? 'audio/webm'
+        : MediaRecorder.isTypeSupported('audio/mp4')
+        ? 'audio/mp4'
+        : '';
+      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+      chunksRef.current = [];
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunksRef.current.push(e.data);
+      };
+      recorder.onstop = () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const blob = new Blob(chunksRef.current, { type: recorder.mimeType });
+        procesarAudio(blob);
+      };
+
+      mediaRecorderRef.current = recorder;
+      recorder.start();
+      setGrabando(true);
+    } catch (err) {
+      console.error(err);
+      setErrorAudio('No se pudo acceder al micrófono. Revisá los permisos del navegador.');
+    }
+  }
+
+  function detenerGrabacion() {
+    mediaRecorderRef.current?.stop();
+    setGrabando(false);
+  }
+
+  async function procesarAudio(blob: Blob) {
+    setProcesandoAudio(true);
+    setErrorAudio(null);
+    try {
+      const formData = new FormData();
+      formData.append('audio', blob, 'audio.webm');
+
+      const res = await fetch('/api/voice/process', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErrorAudio(data.error || 'No se pudo procesar el audio.');
+        return;
+      }
+
+      setPropuesta({ item: data.item, transcripcion: data.transcripcion });
+    } catch (err) {
+      console.error(err);
+      setErrorAudio('Error de conexión al procesar el audio.');
+    } finally {
+      setProcesandoAudio(false);
+    }
+  }
+
+  async function confirmarPropuesta() {
+    if (!propuesta) return;
+    const { item, transcripcion } = propuesta;
+    await supabase.from('agenda_items').insert({
+      user_id: session.user.id,
+      tipo: item.tipo,
+      titulo: item.titulo,
+      contenido: item.contenido,
+      fecha_hora: item.fecha_hora,
+      origen: 'audio',
+      audio_transcripcion: transcripcion,
+    });
+    setPropuesta(null);
+    cargarItems();
+  }
+
+  function cancelarPropuesta() {
+    setPropuesta(null);
+  }
+
   const { hoy, semana, resto } = useMemo(() => agruparPorFecha(items), [items]);
 
   return (
@@ -169,6 +267,58 @@ function Agenda({ session }: { session: Session }) {
           Salir
         </button>
       </div>
+
+      {/* --- Bloque de grabación de voz --- */}
+      <div className="mb-6 bg-slate-900 rounded-xl p-4 space-y-3">
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={grabando ? detenerGrabacion : iniciarGrabacion}
+            disabled={procesandoAudio}
+            className={`flex-1 rounded-lg py-3 font-medium ${
+              grabando
+                ? 'bg-red-600 hover:bg-red-500 animate-pulse'
+                : 'bg-emerald-600 hover:bg-emerald-500'
+            }`}
+          >
+            {procesandoAudio ? 'Procesando...' : grabando ? '⏹ Detener' : '🎤 Grabar por voz'}
+          </button>
+        </div>
+        {errorAudio && <p className="text-red-400 text-sm">{errorAudio}</p>}
+      </div>
+
+      {/* --- Vista previa del ítem interpretado --- */}
+      {propuesta && (
+        <div className="mb-6 bg-slate-800 border border-emerald-600 rounded-xl p-4 space-y-3">
+          <p className="text-xs text-slate-500 italic">&quot;{propuesta.transcripcion}&quot;</p>
+          <div>
+            <p className="text-xs uppercase text-slate-500">{propuesta.item.tipo}</p>
+            <p className="font-medium">{propuesta.item.titulo}</p>
+            {propuesta.item.contenido && (
+              <p className="text-sm text-slate-400">{propuesta.item.contenido}</p>
+            )}
+            {propuesta.item.fecha_hora && (
+              <p className="text-sm text-slate-400">
+                {new Date(propuesta.item.fecha_hora).toLocaleString('es-AR')}
+              </p>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={confirmarPropuesta}
+              className="flex-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 py-2 font-medium"
+            >
+              Confirmar
+            </button>
+            <button
+              onClick={cancelarPropuesta}
+              className="flex-1 rounded-lg bg-slate-700 hover:bg-slate-600 py-2 font-medium"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
 
       <form onSubmit={agregarItem} className="space-y-2 mb-8 bg-slate-900 rounded-xl p-4">
         <input
