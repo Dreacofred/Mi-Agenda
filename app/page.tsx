@@ -127,6 +127,7 @@ function Agenda({ session }: { session: Session }) {
   const [procesandoAudio, setProcesandoAudio] = useState(false);
   const [errorAudio, setErrorAudio] = useState<string | null>(null);
   const [propuesta, setPropuesta] = useState<{ item: ItemPropuesto; transcripcion: string } | null>(null);
+  const [fechaEditable, setFechaEditable] = useState('');
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
 
@@ -210,6 +211,13 @@ function Agenda({ session }: { session: Session }) {
     setGrabando(false);
   }
 
+  function toDatetimeLocalValue(iso: string | null): string {
+    if (!iso) return '';
+    const d = new Date(iso);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+
   async function procesarAudio(blob: Blob) {
     setProcesandoAudio(true);
     setErrorAudio(null);
@@ -229,6 +237,7 @@ function Agenda({ session }: { session: Session }) {
       }
 
       setPropuesta({ item: data.item, transcripcion: data.transcripcion });
+      setFechaEditable(toDatetimeLocalValue(data.item.fecha_hora));
     } catch (err) {
       console.error(err);
       setErrorAudio('Error de conexión al procesar el audio.');
@@ -245,16 +254,18 @@ function Agenda({ session }: { session: Session }) {
       tipo: item.tipo,
       titulo: item.titulo,
       contenido: item.contenido,
-      fecha_hora: item.fecha_hora,
+      fecha_hora: fechaEditable ? new Date(fechaEditable).toISOString() : null,
       origen: 'audio',
       audio_transcripcion: transcripcion,
     });
     setPropuesta(null);
+    setFechaEditable('');
     cargarItems();
   }
 
   function cancelarPropuesta() {
     setPropuesta(null);
+    setFechaEditable('');
   }
 
   const { hoy, semana, resto } = useMemo(() => agruparPorFecha(items), [items]);
@@ -297,11 +308,15 @@ function Agenda({ session }: { session: Session }) {
             {propuesta.item.contenido && (
               <p className="text-sm text-slate-400">{propuesta.item.contenido}</p>
             )}
-            {propuesta.item.fecha_hora && (
-              <p className="text-sm text-slate-400">
-                {new Date(propuesta.item.fecha_hora).toLocaleString('es-AR')}
-              </p>
-            )}
+            <div className="pt-1">
+              <label className="text-xs text-slate-500 block mb-1">Fecha y hora (opcional)</label>
+              <input
+                type="datetime-local"
+                value={fechaEditable}
+                onChange={(e) => setFechaEditable(e.target.value)}
+                className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm"
+              />
+            </div>
           </div>
           <div className="flex gap-2">
             <button
