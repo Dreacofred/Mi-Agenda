@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import type { Session } from '@supabase/supabase-js';
+import Notificaciones from './components/Notificaciones';
 
 type Tipo = 'nota' | 'recordatorio' | 'compromiso';
 type Estado = 'pendiente' | 'hecho' | 'cancelado';
@@ -278,6 +279,7 @@ function Agenda({ session }: { session: Session }) {
           Salir
         </button>
       </div>
+      <Notificaciones session={session} />
 
       {/* --- Bloque de grabación de voz --- */}
       <div className="mb-6 bg-slate-900 rounded-xl p-4 space-y-3">
