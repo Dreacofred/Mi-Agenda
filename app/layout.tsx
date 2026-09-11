@@ -2,8 +2,8 @@ import './globals.css';
 import type { Metadata, Viewport } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Agenda de Viajes',
-  description: 'Agenda personal hablada, pensada para usar en viajes',
+  title: 'Mi Agenda',
+  description: 'Agenda personal y de trabajo, hablada y por texto',
   manifest: '/manifest.json',
 };
 
