@@ -1,6 +1,6 @@
 {
-  "name": "Agenda de Viajes",
-  "short_name": "Agenda",
+  "name": "Mi Agenda",
+  "short_name": "Mi Agenda",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0f172a",

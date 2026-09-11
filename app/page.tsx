@@ -7,6 +7,7 @@ import Notificaciones from './components/Notificaciones';
 
 type Tipo = 'nota' | 'recordatorio' | 'compromiso';
 type Estado = 'pendiente' | 'hecho' | 'cancelado';
+type Prioridad = 'alta' | 'media' | 'baja' | null;
 
 interface AgendaItem {
   id: string;
@@ -16,6 +17,8 @@ interface AgendaItem {
   fecha_hora: string | null;
   estado: Estado;
   created_at: string;
+  prioridad: Prioridad;
+  etiquetas: string[];
 }
 
 interface ItemPropuesto {
@@ -78,7 +81,7 @@ function Login() {
   return (
     <div className="min-h-screen flex items-center justify-center p-6">
       <form onSubmit={handleSubmit} className="w-full max-w-sm space-y-4">
-        <h1 className="text-2xl font-semibold text-center mb-6">Agenda de Viajes</h1>
+        <h1 className="text-2xl font-semibold text-center mb-6">Mi Agenda</h1>
         <input
           type="email"
           placeholder="Email"
@@ -121,6 +124,8 @@ function Agenda({ session }: { session: Session }) {
   const [titulo, setTitulo] = useState('');
   const [tipo, setTipo] = useState<Tipo>('nota');
   const [fecha, setFecha] = useState('');
+  const [prioridad, setPrioridad] = useState<Prioridad>(null);
+  const [etiquetasTexto, setEtiquetasTexto] = useState('');
   const [cargando, setCargando] = useState(true);
 
   // --- Estado para grabación de voz ---
@@ -151,15 +156,23 @@ function Agenda({ session }: { session: Session }) {
   async function agregarItem(e: React.FormEvent) {
     e.preventDefault();
     if (!titulo.trim()) return;
+    const etiquetas = etiquetasTexto
+      .split(',')
+      .map((t) => t.trim())
+      .filter((t) => t.length > 0);
     await supabase.from('agenda_items').insert({
       user_id: session.user.id,
       tipo,
       titulo: titulo.trim(),
       fecha_hora: fecha ? new Date(fecha).toISOString() : null,
       origen: 'texto',
+      prioridad,
+      etiquetas,
     });
     setTitulo('');
     setFecha('');
+    setPrioridad(null);
+    setEtiquetasTexto('');
     cargarItems();
   }
 
@@ -216,7 +229,9 @@ function Agenda({ session }: { session: Session }) {
     if (!iso) return '';
     const d = new Date(iso);
     const pad = (n: number) => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(
+      d.getMinutes()
+    )}`;
   }
 
   async function procesarAudio(blob: Blob) {
@@ -274,11 +289,12 @@ function Agenda({ session }: { session: Session }) {
   return (
     <div className="max-w-xl mx-auto p-4 pb-24">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-xl font-semibold">Agenda de Viajes</h1>
+        <h1 className="text-xl font-semibold">Mi Agenda</h1>
         <button onClick={() => supabase.auth.signOut()} className="text-sm text-slate-400 underline">
           Salir
         </button>
       </div>
+
       <Notificaciones session={session} />
 
       {/* --- Bloque de grabación de voz --- */}
@@ -310,15 +326,15 @@ function Agenda({ session }: { session: Session }) {
             {propuesta.item.contenido && (
               <p className="text-sm text-slate-400">{propuesta.item.contenido}</p>
             )}
-            <div className="pt-1">
-              <label className="text-xs text-slate-500 block mb-1">Fecha y hora (opcional)</label>
-              <input
-                type="datetime-local"
-                value={fechaEditable}
-                onChange={(e) => setFechaEditable(e.target.value)}
-                className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm"
-              />
-            </div>
+          </div>
+          <div className="pt-1">
+            <label className="text-xs text-slate-500 block mb-1">Fecha y hora (opcional)</label>
+            <input
+              type="datetime-local"
+              value={fechaEditable}
+              onChange={(e) => setFechaEditable(e.target.value)}
+              className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm"
+            />
           </div>
           <div className="flex gap-2">
             <button
@@ -362,6 +378,33 @@ function Agenda({ session }: { session: Session }) {
             className="flex-1 rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm"
           />
         </div>
+        <div className="flex gap-2">
+          {(['alta', 'media', 'baja'] as const).map((p) => (
+            <button
+              key={p}
+              type="button"
+              onClick={() => setPrioridad(prioridad === p ? null : p)}
+              className={`flex-1 rounded-lg py-2 text-sm font-medium border ${
+                prioridad === p
+                  ? p === 'alta'
+                    ? 'bg-red-600 border-red-600'
+                    : p === 'media'
+                    ? 'bg-yellow-600 border-yellow-600'
+                    : 'bg-emerald-600 border-emerald-600'
+                  : 'bg-slate-800 border-slate-700 text-slate-400'
+              }`}
+            >
+              {p === 'alta' ? '🔴 Alta' : p === 'media' ? '🟡 Media' : '🟢 Baja'}
+            </button>
+          ))}
+        </div>
+        <input
+          type="text"
+          placeholder="Etiquetas (separadas por coma)"
+          value={etiquetasTexto}
+          onChange={(e) => setEtiquetasTexto(e.target.value)}
+          className="w-full rounded-lg bg-slate-800 border border-slate-700 px-4 py-2 text-sm"
+        />
         <button type="submit" className="w-full rounded-lg bg-emerald-600 hover:bg-emerald-500 py-3 font-medium">
           Agregar
         </button>
@@ -409,11 +452,25 @@ function Grupo({
                 className="w-5 h-5"
               />
               <div>
-                <p className={item.estado === 'hecho' ? 'line-through text-slate-500' : ''}>{item.titulo}</p>
+                <div className="flex items-center gap-2">
+                  {item.prioridad && (
+                    <span>{item.prioridad === 'alta' ? '🔴' : item.prioridad === 'media' ? '🟡' : '🟢'}</span>
+                  )}
+                  <p className={item.estado === 'hecho' ? 'line-through text-slate-500' : ''}>{item.titulo}</p>
+                </div>
                 <p className="text-xs text-slate-500">
                   {item.tipo}
                   {item.fecha_hora ? ' · ' + new Date(item.fecha_hora).toLocaleString('es-AR') : ''}
                 </p>
+                {item.etiquetas && item.etiquetas.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {item.etiquetas.map((et) => (
+                      <span key={et} className="text-xs bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full">
+                        {et}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
             <button onClick={() => onDelete(item)} className="text-slate-500 hover:text-red-400 text-sm">
