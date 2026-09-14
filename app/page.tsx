@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import type { Session } from '@supabase/supabase-js';
 import Notificaciones from './components/Notificaciones';
+import RepeticionTareas from './components/RepeticionTareas';
 
 type Tipo = 'nota' | 'recordatorio' | 'compromiso';
 type Estado = 'pendiente' | 'hecho' | 'cancelado';
@@ -295,6 +296,8 @@ function Agenda({ session }: { session: Session }) {
         </button>
       </div>
 
+      <RepeticionTareas session={session} />
+
       <Notificaciones session={session} />
 
       {/* --- Bloque de grabación de voz --- */}
@@ -473,9 +476,21 @@ function Grupo({
                 )}
               </div>
             </div>
-            <button onClick={() => onDelete(item)} className="text-slate-500 hover:text-red-400 text-sm">
-              Borrar
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => onToggle(item)}
+                className={
+                  item.estado === 'hecho'
+                    ? 'text-emerald-400 text-sm'
+                    : 'text-slate-500 hover:text-emerald-400 text-sm'
+                }
+              >
+                ✓ Hecho
+              </button>
+              <button onClick={() => onDelete(item)} className="text-slate-500 hover:text-red-400 text-sm">
+                Borrar
+              </button>
+            </div>
           </li>
         ))}
       </ul>
@@ -501,7 +516,8 @@ function agruparPorFecha(items: AgendaItem[]) {
       continue;
     }
     const f = new Date(item.fecha_hora);
-    if (f >= inicioHoy && f < finHoy) hoy.push(item);
+    if (f < inicioHoy && item.estado !== 'hecho') hoy.push(item);
+    else if (f >= inicioHoy && f < finHoy) hoy.push(item);
     else if (f >= finHoy && f < finSemana) semana.push(item);
     else resto.push(item);
   }
