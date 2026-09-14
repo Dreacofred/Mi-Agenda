@@ -143,7 +143,7 @@ function Agenda({ session }: { session: Session }) {
     const { data } = await supabase
       .from('agenda_items')
       .select('*')
-      .neq('estado', 'cancelado')
+      .eq('estado', 'pendiente')
       .order('fecha_hora', { ascending: true, nullsFirst: false })
       .order('created_at', { ascending: false });
     setItems((data as AgendaItem[]) || []);
